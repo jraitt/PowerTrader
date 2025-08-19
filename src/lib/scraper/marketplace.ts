@@ -1,4 +1,5 @@
 import { URLImportResult } from '@/types/item';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 /**
  * Scrape Facebook Marketplace listing
@@ -29,13 +30,31 @@ export async function scrapeFacebookMarketplace(url: string): Promise<URLImportR
 
     const html = await response.text();
     
-    // Try to extract from structured data first (more reliable)
-    const structuredData = extractStructuredData(html);
+    // Hybrid Approach: HTML parsing for text data + AI for photos
+    console.log('Using hybrid extraction: HTML for text data, AI for photos...');
     
-    // Extract data using regex patterns (since Facebook uses dynamic content)
+    // Extract text data using HTML parsing (reliable)
+    const structuredData = extractStructuredData(html);
     const title = structuredData?.title || extractTitle(html) || 'Facebook Marketplace Item';
     const description = structuredData?.description || extractDescription(html) || 'No description available';
-    const photos = structuredData?.photos?.length ? structuredData.photos : extractPhotos(html);
+    const price = extractPrice(html);
+    const location = extractLocation(html);
+    
+    // Extract photos using AI (more accurate photo selection)
+    let photos: string[] = [];
+    if (structuredData?.photos?.length) {
+      photos = structuredData.photos;
+      console.log('Using structured data photos');
+    } else {
+      try {
+        console.log('Using AI for photo extraction...');
+        photos = await extractPhotosWithGeminiAI(html, url);
+        console.log(`AI photo extraction successful: ${photos.length} photos`);
+      } catch (error) {
+        console.warn('AI photo extraction failed, falling back to pattern matching:', error);
+        photos = await extractPhotos(html, url);
+      }
+    }
     
     // Debug logging to understand the extraction
     console.log(`Extracted ${photos.length} photos from Facebook listing`);
@@ -58,14 +77,15 @@ export async function scrapeFacebookMarketplace(url: string): Promise<URLImportR
     const result: URLImportResult = {
       title,
       description,
-      price: extractPrice(html),
-      location: extractLocation(html),
+      price,
+      location,
       photos,
       metadata: {
         source: 'facebook',
         listingId: extractListingId(url),
         extractedAt: new Date().toISOString(),
-        extractedYear: extractYear(title, description), // Extract year for AI enhancement
+        extractedYear: extractYear(title, description),
+        extractionMethod: 'hybrid-html-ai',
       },
     };
 
@@ -295,24 +315,76 @@ function extractDescription(html: string): string | null {
 }
 
 /**
- * Extract price from Facebook Marketplace HTML
+ * Extract price from Facebook Marketplace HTML with enhanced patterns
  */
 function extractPrice(html: string): number | null {
+  console.log('Extracting price from Facebook Marketplace HTML...');
+  
+  // Enhanced patterns for Facebook price extraction
   const patterns = [
+    // Facebook-specific price patterns
     /"marketplace_listing_price":(\d+)/i,
     /"listing_price":(\d+)/i,
-    /\$[\s]*([0-9,]+)/g,
+    /"price":\{"amount":"(\d+)"/i,
+    /"price":\{"text":"\$([0-9,]+)"/i,
+    /"listing_price":\{"amount":(\d+)/i,
+    /"marketplace_listing_price":\{"amount":(\d+)/i,
+    
+    // JSON-LD structured data price patterns
+    /"price":"(\d+)"/i,
+    /"price":\s*"([0-9,]+)"/i,
+    /"amount":\s*(\d+)/i,
+    /"value":\s*(\d+)/i,
+    
+    // Meta property patterns
+    /property="product:price:amount"\s+content="([0-9,]+)"/i,
+    /property="og:price:amount"\s+content="([0-9,]+)"/i,
+    
+    // General dollar amount patterns (more specific)
+    /"\$([0-9,]+)"/g,
+    /\$\s*([0-9,]+)(?:\s|<|"|')/g,
+    /price[^>]*>.*?\$\s*([0-9,]+)/gi,
+    /\$([0-9,]+)\s*(?:USD|usd|each|\/)/gi,
+    
+    // Facebook marketplace specific UI patterns
+    /marketplace.*?price.*?\$([0-9,]+)/gi,
+    /price.*?marketplace.*?\$([0-9,]+)/gi,
+    
+    // Aria labels and accessibility text
+    /aria-label="[^"]*\$([0-9,]+)[^"]*"/gi,
+    /alt="[^"]*\$([0-9,]+)[^"]*"/gi,
   ];
 
   for (const pattern of patterns) {
-    const match = html.match(pattern);
-    if (match && match[1]) {
-      const price = parseInt(match[1].replace(/,/g, ''));
-      if (!isNaN(price) && price > 0) {
-        return price;
+    // Use match() for non-global patterns, matchAll() for global patterns
+    if (pattern.global) {
+      const matches = html.matchAll(pattern);
+      for (const match of matches) {
+        if (match && match[1]) {
+          const priceStr = match[1].replace(/,/g, '');
+          const price = parseInt(priceStr);
+          
+          if (!isNaN(price) && price > 0 && price < 10000000) { // Reasonable price range
+            console.log(`Found price: $${price} using pattern: ${pattern.source.substring(0, 50)}...`);
+            return price;
+          }
+        }
+      }
+    } else {
+      const match = html.match(pattern);
+      if (match && match[1]) {
+        const priceStr = match[1].replace(/,/g, '');
+        const price = parseInt(priceStr);
+        
+        if (!isNaN(price) && price > 0 && price < 10000000) { // Reasonable price range
+          console.log(`Found price: $${price} using pattern: ${pattern.source.substring(0, 50)}...`);
+          return price;
+        }
       }
     }
   }
+  
+  console.log('No price found using HTML patterns');
   return null;
 }
 
@@ -336,46 +408,125 @@ function extractLocation(html: string): string | null {
 }
 
 /**
- * Extract photos from Facebook Marketplace HTML using targeted DOM extraction
+ * Extract photos from Facebook Marketplace HTML using AI-assisted approach
  */
-function extractPhotos(html: string): string[] {
-  // First try to extract from Facebook's specific image gallery structure
+async function extractPhotos(html: string, url: string): Promise<string[]> {
+  console.log('Starting AI-assisted photo extraction for Facebook Marketplace...');
+  
+  // First try Gemini AI analysis to identify listing photos
+  try {
+    const aiExtractedImages = await extractPhotosWithGeminiAI(html, url);
+    if (aiExtractedImages.length > 0) {
+      console.log(`Found ${aiExtractedImages.length} images using Gemini AI analysis`);
+      return aiExtractedImages;
+    }
+  } catch (error) {
+    console.warn('Gemini AI extraction failed, falling back to manual methods:', error);
+  }
+  
+  // Fallback to advanced gallery extraction
   const galleryImages = extractFacebookGalleryImages(html);
   if (galleryImages.length > 0) {
     console.log(`Found ${galleryImages.length} images from Facebook image gallery`);
     return galleryImages;
   }
   
-  // Fallback to pattern-based extraction if gallery extraction fails
+  // Final fallback to pattern-based extraction
   console.log('Falling back to pattern-based image extraction');
   return extractPhotosPatternBased(html);
 }
 
 /**
- * Extract images specifically from Facebook's image gallery/carousel structure
+ * Use Gemini AI to analyze webpage and extract listing photo URLs
  */
-function extractFacebookGalleryImages(html: string): string[] {
-  const photos: string[] = [];
+async function extractPhotosWithGeminiAI(html: string, url: string): Promise<string[]> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY not configured');
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+  // Extract all potential image URLs from HTML
+  const allImageUrls = extractAllImageUrls(html);
+  if (allImageUrls.length === 0) {
+    console.log('No image URLs found in HTML');
+    return [];
+  }
+
+  console.log(`Found ${allImageUrls.length} total image URLs, asking Gemini to identify listing photos...`);
+
+  const prompt = `You are analyzing a Facebook Marketplace listing page. I have extracted ${allImageUrls.length} image URLs from the HTML.
+
+Your task: Identify which URLs are the actual product/item listing photos (NOT profile pictures, ads, recommended items, or UI elements).
+
+CONTEXT: This is a marketplace listing for a vehicle or equipment item. The listing should have 3-8 main product photos showing the item from different angles.
+
+IMAGE URLS:
+${allImageUrls.map((url, i) => `${i + 1}. ${url}`).join('\n')}
+
+ANALYSIS CRITERIA:
+- Look for URLs with "t39.30808-6" format (Facebook's marketplace photo format)
+- Prefer URLs with quality indicators like "s960x960", "dst-jpg", "p960", "p720"
+- Avoid URLs with "profile", "avatar", "cover", "ad", "thumb" indicators
+- Group similar URLs (same base image in different sizes) and pick the highest quality
+
+RESPONSE FORMAT:
+Return ONLY a JSON array of the URLs that are actual listing photos, ordered by importance:
+["url1", "url2", "url3", ...]
+
+Limit to maximum 6 URLs. If unsure, err on the side of caution and return fewer URLs rather than including non-listing images.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log('Gemini AI response:', text);
+
+    // Parse JSON response
+    const jsonMatch = text.match(/\[[\s\S]*?\]/);
+    if (!jsonMatch) {
+      throw new Error('No JSON array found in Gemini response');
+    }
+
+    const extractedUrls = JSON.parse(jsonMatch[0]);
+    
+    if (!Array.isArray(extractedUrls)) {
+      throw new Error('Gemini response is not an array');
+    }
+
+    // Validate URLs
+    const validUrls = extractedUrls.filter(url => 
+      typeof url === 'string' && 
+      url.startsWith('http') && 
+      url.includes('fbcdn.net')
+    );
+
+    console.log(`Gemini AI identified ${validUrls.length} listing photos`);
+    return validUrls.slice(0, 6); // Limit to 6 max
+
+  } catch (error) {
+    console.error('Gemini AI analysis failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Extract all image URLs from HTML for AI analysis
+ */
+function extractAllImageUrls(html: string): string[] {
+  const urls = new Set<string>();
   
-  // Target Facebook's specific image gallery structures
-  const galleryPatterns = [
-    // Media viewer and carousel patterns
-    /data-testid="media-viewer"[^>]*>[\s\S]*?src="([^"]*fbcdn[^"]*t39\.30808-6[^"]*\.(?:jpg|jpeg|png)[^"]*)"/g,
-    /data-testid="photo-viewer"[^>]*>[\s\S]*?src="([^"]*fbcdn[^"]*t39\.30808-6[^"]*\.(?:jpg|jpeg|png)[^"]*)"/g,
-    
-    // Image carousel containers
-    /<div[^>]*carousel[^>]*>[\s\S]*?src="([^"]*fbcdn[^"]*t39\.30808-6[^"]*\.(?:jpg|jpeg|png)[^"]*)"/gi,
-    /<div[^>]*gallery[^>]*>[\s\S]*?src="([^"]*fbcdn[^"]*t39\.30808-6[^"]*\.(?:jpg|jpeg|png)[^"]*)"/gi,
-    
-    // Marketplace listing photo containers
-    /<div[^>]*marketplace.*?photo[^>]*>[\s\S]*?src="([^"]*fbcdn[^"]*t39\.30808-6[^"]*\.(?:jpg|jpeg|png)[^"]*)"/gi,
-    
-    // Look for images within listing-specific containers
-    /listing.*?image.*?src="([^"]*fbcdn[^"]*t39\.30808-6[^"]*\.(?:jpg|jpeg|png)[^"]*)"/gi,
-    /marketplace.*?image.*?src="([^"]*fbcdn[^"]*t39\.30808-6[^"]*\.(?:jpg|jpeg|png)[^"]*)"/gi,
+  // Find all src attributes in img tags and other image references
+  const patterns = [
+    /src="([^"]*fbcdn[^"]*\.(?:jpg|jpeg|png|webp)[^"]*)"/g,
+    /"uri":"([^"]*fbcdn[^"]*\.(?:jpg|jpeg|png|webp)[^"]*)"/g,
+    /"url":"([^"]*fbcdn[^"]*\.(?:jpg|jpeg|png|webp)[^"]*)"/g,
   ];
-  
-  for (const pattern of galleryPatterns) {
+
+  patterns.forEach(pattern => {
     let match;
     while ((match = pattern.exec(html)) !== null) {
       if (match[1]) {
@@ -384,22 +535,244 @@ function extractFacebookGalleryImages(html: string): string[] {
           .replace(/\\u002F/g, '/')
           .replace(/\\/g, '');
         
-        if (cleanUrl.startsWith('http') && !photos.includes(cleanUrl)) {
-          photos.push(cleanUrl);
+        if (cleanUrl.startsWith('http') && cleanUrl.includes('fbcdn.net')) {
+          urls.add(cleanUrl);
         }
       }
     }
+  });
+
+  return Array.from(urls);
+}
+
+/**
+ * Use Gemini AI to extract ALL data from Facebook Marketplace listing
+ */
+async function extractAllDataWithGemini(html: string, url: string): Promise<URLImportResult | null> {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY not configured');
+  }
+
+  const genAI = new GoogleGenerativeAI(apiKey);
+  const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+
+  // Extract all image URLs for AI analysis
+  const allImageUrls = extractAllImageUrls(html);
+  
+  console.log(`Analyzing Facebook Marketplace listing with ${allImageUrls.length} potential images...`);
+
+  const prompt = `You are analyzing a Facebook Marketplace listing page. I need you to extract information from the PRIMARY listing for this specific URL.
+
+URL: ${url}
+
+IMPORTANT: This URL leads to a specific Facebook Marketplace listing. The page may contain recommended items, ads, or other content, but you must focus ONLY on the main listing that this URL is for.
+
+TASK: Extract the following information from the PRIMARY listing (the one this URL points to):
+
+1. TITLE: The main listing title/headline of the item
+2. DESCRIPTION: The seller's description of the item (full text)
+3. PRICE: The asking price in dollars (number only, no $ symbol)
+4. LOCATION: Where the item is located (city, state, region)
+5. PHOTOS: Select the main product photos for this listing
+6. YEAR: Extract the year from title or description if mentioned
+7. MAKE: Extract the manufacturer/brand from title or description  
+8. MODEL: Extract the model name from title or description
+
+FOR PHOTOS - Select from these URLs (${allImageUrls.length} total):
+${allImageUrls.map((url, i) => `${i + 1}. ${url}`).join('\n')}
+
+PHOTO SELECTION CRITERIA:
+- Look for URLs with "t39.30808-6" format (Facebook's marketplace photo format)
+- Prefer URLs with quality indicators like "s960x960", "dst-jpg", "p960", "p720"
+- Avoid URLs with "profile", "avatar", "cover", "ad", "thumb" indicators
+- Group similar URLs (same image in different sizes) and pick highest quality
+- Select 4-6 photos maximum that show the main item
+
+RESPONSE FORMAT (JSON only):
+{
+  "title": "string",
+  "description": "string", 
+  "price": number,
+  "location": "string",
+  "photos": ["url1", "url2", ...],
+  "year": number,
+  "make": "string",
+  "model": "string"
+}
+
+Focus on extracting data from the main listing content, not from recommended items or sidebar content.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    console.log('Gemini AI comprehensive extraction response:', text.substring(0, 500) + '...');
+
+    // Parse JSON response
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON object found in Gemini response');
+    }
+
+    const extractedData = JSON.parse(jsonMatch[0]);
+    
+    // Validate the response structure
+    if (!extractedData.title || !extractedData.photos || !Array.isArray(extractedData.photos)) {
+      throw new Error('Invalid response structure from Gemini');
+    }
+
+    // Clean and validate photos
+    const validPhotos = extractedData.photos.filter((url: any) => 
+      typeof url === 'string' && 
+      url.startsWith('http') && 
+      url.includes('fbcdn.net')
+    ).slice(0, 6);
+
+    // Build the result
+    const aiResult: URLImportResult = {
+      title: extractedData.title || 'Facebook Marketplace Item',
+      description: extractedData.description || 'No description available',
+      price: typeof extractedData.price === 'number' ? extractedData.price : null,
+      location: extractedData.location || null,
+      photos: validPhotos,
+      metadata: {
+        source: 'facebook',
+        listingId: extractListingId(url),
+        extractedAt: new Date().toISOString(),
+        extractedYear: extractedData.year || null,
+        extractedMake: extractedData.make || null,
+        extractedModel: extractedData.model || null,
+        extractionMethod: 'gemini-ai',
+      },
+    };
+
+    console.log(`Gemini AI extracted: ${aiResult.title}, $${aiResult.price}, ${validPhotos.length} photos`);
+    return aiResult;
+
+  } catch (error) {
+    console.error('Gemini AI comprehensive extraction failed:', error);
+    throw error;
+  }
+}
+
+/**
+ * Extract images specifically from Facebook's image gallery/carousel structure using advanced techniques
+ */
+function extractFacebookGalleryImages(html: string): string[] {
+  console.log('Starting advanced Facebook gallery image extraction...');
+  
+  // Step 1: Find the main listing content area
+  const listingContentMatch = html.match(/<div[^>]*(?:marketplace|listing)[^>]*>[\s\S]*?<\/div>/gi);
+  if (!listingContentMatch || listingContentMatch.length === 0) {
+    console.log('No main listing content found, falling back to full HTML');
   }
   
-  // Apply additional filtering to gallery images
-  const filteredGalleryPhotos = photos.filter(url => {
-    // Only keep t39.30808-6 format with high quality indicators
-    return url.includes('t39.30808-6') && 
-           (url.includes('s960x960') || url.includes('dst-jpg') || url.includes('p960') || url.includes('p720'));
+  // Step 2: Extract all t39.30808-6 images with metadata
+  const imagePattern = /src="([^"]*fbcdn[^"]*t39\.30808-6[^"]*\.(?:jpg|jpeg|png)[^"]*)"/g;
+  const allImages: Array<{url: string, context: string, score: number}> = [];
+  
+  let match;
+  while ((match = imagePattern.exec(html)) !== null) {
+    const imageUrl = match[1]
+      .replace(/\\\//g, '/')
+      .replace(/\\u002F/g, '/')
+      .replace(/\\/g, '');
+    
+    if (!imageUrl.startsWith('http')) continue;
+    
+    // Get surrounding context (500 chars before and after)
+    const matchIndex = match.index;
+    const contextStart = Math.max(0, matchIndex - 500);
+    const contextEnd = Math.min(html.length, matchIndex + 500);
+    const context = html.slice(contextStart, contextEnd).toLowerCase();
+    
+    // Calculate image relevance score based on context and URL characteristics
+    let score = 0;
+    
+    // URL quality indicators
+    if (imageUrl.includes('s960x960')) score += 50;
+    if (imageUrl.includes('dst-jpg')) score += 40;
+    if (imageUrl.includes('p960') || imageUrl.includes('p720')) score += 30;
+    if (imageUrl.includes('1080') || imageUrl.includes('960')) score += 20;
+    
+    // Context indicators (positive)
+    if (context.includes('photo') || context.includes('image')) score += 15;
+    if (context.includes('gallery') || context.includes('carousel')) score += 25;
+    if (context.includes('listing') || context.includes('marketplace')) score += 20;
+    if (context.includes('media-viewer') || context.includes('photo-viewer')) score += 30;
+    
+    // Context indicators (negative - likely not listing photos)
+    if (context.includes('profile') || context.includes('avatar')) score -= 100;
+    if (context.includes('cover') || context.includes('header')) score -= 80;
+    if (context.includes('ad') || context.includes('sponsor')) score -= 90;
+    if (context.includes('recommendation') || context.includes('suggested')) score -= 70;
+    if (context.includes('friend') || context.includes('user')) score -= 60;
+    if (context.includes('comment') || context.includes('reaction')) score -= 50;
+    if (context.includes('badge') || context.includes('icon')) score -= 40;
+    
+    // Penalize very small images (likely thumbnails or icons)
+    if (imageUrl.includes('50x50') || imageUrl.includes('32x32') || imageUrl.includes('64x64')) {
+      score -= 100;
+    }
+    
+    allImages.push({ url: imageUrl, context, score });
+  }
+  
+  console.log(`Found ${allImages.length} total t39.30808-6 images`);
+  
+  // Step 3: Apply clustering to find the main image group
+  // Group images by similar URL patterns (likely from same listing)
+  const imageGroups = new Map<string, Array<{url: string, context: string, score: number}>>();
+  
+  allImages.forEach(img => {
+    // Extract base pattern from URL (remove size and cache parameters)
+    const basePattern = img.url.split('?')[0].replace(/_(s|p|dst-jpg).*/, '');
+    const groupKey = basePattern.split('/').slice(-2, -1)[0]; // Get the image ID part
+    
+    if (!imageGroups.has(groupKey)) {
+      imageGroups.set(groupKey, []);
+    }
+    imageGroups.get(groupKey)!.push(img);
   });
   
-  console.log(`Gallery extraction filtered: ${filteredGalleryPhotos.length} from ${photos.length} found`);
-  return filteredGalleryPhotos.slice(0, 8);
+  console.log(`Grouped into ${imageGroups.size} image clusters`);
+  
+  // Step 4: Find the best group (highest total score, reasonable size)
+  let bestGroup: Array<{url: string, context: string, score: number}> = [];
+  let bestScore = -Infinity;
+  
+  imageGroups.forEach((group, key) => {
+    const totalScore = group.reduce((sum, img) => sum + img.score, 0);
+    const avgScore = totalScore / group.length;
+    
+    // Prefer groups with 3-8 images (typical for marketplace listings)
+    const sizeBonus = group.length >= 3 && group.length <= 8 ? 50 : 0;
+    const finalScore = avgScore + sizeBonus;
+    
+    console.log(`Group ${key}: ${group.length} images, avg score: ${avgScore.toFixed(1)}, final: ${finalScore.toFixed(1)}`);
+    
+    if (finalScore > bestScore && group.length >= 1) {
+      bestScore = finalScore;
+      bestGroup = group;
+    }
+  });
+  
+  // Step 5: Sort best group by individual scores and return top images
+  const sortedImages = bestGroup
+    .filter(img => img.score > 0) // Only positive scores
+    .sort((a, b) => b.score - a.score)
+    .map(img => img.url)
+    .slice(0, 6); // Limit to 6 images max
+  
+  console.log(`Selected ${sortedImages.length} images from best group (score: ${bestScore.toFixed(1)})`);
+  
+  // Remove duplicates
+  const uniqueImages = [...new Set(sortedImages)];
+  
+  console.log(`Final result: ${uniqueImages.length} unique images`);
+  return uniqueImages;
 }
 
 /**
@@ -515,7 +888,7 @@ function extractPhotosPatternBased(html: string): string[] {
 
   // Sort by relevance score and return top images
   // Only include images with a minimum score to filter out random images
-  const MIN_MARKETPLACE_SCORE = 100; // VERY HIGH threshold - only t39.30808-6 format with good dimensions
+  const MIN_MARKETPLACE_SCORE = 50; // Lowered since we have better filtering now
   
   const allCandidates = Array.from(imageMap.entries()).sort(([,a], [,b]) => b - a);
   const filteredImages = allCandidates.filter(([, score]) => score >= MIN_MARKETPLACE_SCORE);
@@ -532,7 +905,7 @@ function extractPhotosPatternBased(html: string): string[] {
   
   const sortedImages = filteredImages
     .map(([url]) => url)
-    .slice(0, 6); // Limit to 6 photos max - should match typical marketplace listings
+    .slice(0, 5); // Limit to 5 photos max to reduce chance of extra images
 
   return sortedImages;
 }
