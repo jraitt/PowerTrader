@@ -1,0 +1,22 @@
+# Simple Docker Compose for testing without volumes
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    ports:
+      - "3040:3040"
+    env_file:
+      - .env.development
+    environment:
+      - NODE_ENV=development
+      - PORT=3040
+    command: pnpm dev
+    restart: unless-stopped
+    networks:
+      - powertrader-network
+
+networks:
+  powertrader-network:
+    driver: bridge

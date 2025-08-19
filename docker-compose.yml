@@ -1,0 +1,59 @@
+# PowerTrader Docker Compose Configuration
+# Works for both development and production based on environment variables
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ${BUILD_TARGET:-development}
+    ports:
+      - "${PORT:-3040}:3040"
+    volumes:
+      # Source code (only files needed for hot reload)
+      - ./src:/app/src:delegated
+      - ./public:/app/public:delegated
+      - ./tailwind.config.js:/app/tailwind.config.js:delegated
+      - ./postcss.config.js:/app/postcss.config.js:delegated
+      - ./next.config.js:/app/next.config.js:delegated
+      - ./tsconfig.json:/app/tsconfig.json:delegated
+      - ./components.json:/app/components.json:delegated
+      
+      # Named volumes for dependencies and build cache (better performance)
+      - powertrader_node_modules:/app/node_modules
+      - powertrader_next_cache:/app/.next
+      - powertrader_pnpm_store:/app/.pnpm-store
+      
+      # Package files (for dependency management)
+      - ./package.json:/app/package.json:delegated
+      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml:delegated
+    env_file:
+      - .env.${NODE_ENV:-development}
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3040
+      # pnpm configuration for container optimization
+      - PNPM_HOME=/app/.pnpm
+    command: ["sh", "-c", "pnpm dev"]
+    restart: ${RESTART_POLICY:-unless-stopped}
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:3040/api/health || exit 1"]
+      interval: ${HEALTH_INTERVAL:-60s}
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - powertrader-network
+
+networks:
+  powertrader-network:
+    driver: bridge
+
+# Named volumes for better performance and persistence
+volumes:
+  powertrader_node_modules:
+    driver: local
+  powertrader_next_cache:
+    driver: local
+  powertrader_pnpm_store:
+    driver: local

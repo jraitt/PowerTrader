@@ -1,0 +1,27 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__clerk__getUserId",
+      "mcp__clerk__getUserCount",
+      "mcp__supabase__get_project_url",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__apply_migration",
+      "Bash(docker-compose:*)",
+      "Bash(docker-compose up:*)",
+      "mcp__supabase__execute_sql",
+      "mcp__clerk__createInvitation",
+      "Bash(curl:*)",
+      "Bash(rm:*)",
+      "Bash(docker run:*)",
+      "Bash(cp:*)",
+      "Bash(git add:*)",
+      "Bash(git push:*)"
+    ],
+    "deny": [],
+    "ask": [],
+    "additionalDirectories": [
+      "C:\\c\\Users\\jrait\\Documents\\AI\\Projects"
+    ]
+  }
+}
