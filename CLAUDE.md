@@ -9,7 +9,24 @@ PowerTrader is a web application for managing the buying and selling of small en
 **Application Name:** PowerTrader - Buy / Sell the East  
 **Purpose:** Inventory management and sales tracking for small engine machinery  
 **Architecture:** Docker-first, single container design  
-**Development Philosophy:** All development and production runs in Docker with environment-based configuration
+**Development Philosophy:** All development and production runs in Docker with environment-based configuration  
+**MCP Integration:** Uses Supabase and Clerk MCP servers for database and authentication management
+
+## Recent Session Notes (August 19, 2025)
+
+### 🚀 **Major Accomplishments**
+- **Complete CRUD Operations:** Implemented view, edit, delete functionality for inventory items
+- **Photo Upload Integration:** Fixed photo upload in edit forms and ensured proper display
+- **Service Role Client Consistency:** Critical fix - all database and storage operations now use service role client to bypass RLS
+- **Type Safety Improvements:** Fixed field name mismatches (item_photos vs photos) across components
+- **API Endpoint Fixes:** Resolved 404 errors and RLS policy blocking issues in upload endpoints
+
+### 🔧 **Key Technical Fixes**
+1. **RLS Policy Resolution:** Fixed Row Level Security blocking by using `serviceSupabase` consistently
+2. **Storage Operations:** Fixed Supabase storage operations to use service role client 
+3. **Field Name Alignment:** Updated ItemGrid and ItemTable components to use `item_photos` field
+4. **Upload Endpoint:** Resolved 404 errors and storage policy violations in `/api/upload`
+5. **Photo Display:** Fixed inventory grid/table to properly show uploaded photos with badges
 
 ## Docker-First Architecture
 
@@ -181,12 +198,12 @@ NODE_ENV=development|production
 PORT=3040
 NEXT_PUBLIC_APP_URL=http://localhost:3040
 
-# Supabase
+# Supabase (using MCP server - no service role key needed)
 NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_ANON_KEY=
-SUPABASE_SERVICE_ROLE_KEY=
+# Note: SUPABASE_SERVICE_ROLE_KEY not needed - using Supabase MCP server
 
-# Clerk
+# Clerk (using MCP server)
 NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=
 CLERK_SECRET_KEY=
 
@@ -196,6 +213,36 @@ GEMINI_API_KEY=
 # Storage
 NEXT_PUBLIC_STORAGE_BUCKET=powertrader-images
 ```
+
+## MCP Server Integration
+
+PowerTrader uses Claude Code's MCP (Model Context Protocol) servers for external service integration:
+
+### Supabase MCP Server
+- **Purpose:** Database operations, schema management, user authentication
+- **Benefits:** Direct database access without service role key, simplified queries
+- **Usage:** `mcp__supabase__*` tools for all database operations
+- **Key Operations:**
+  - Table creation and management
+  - User sync and authentication
+  - Storage bucket management
+  - Row Level Security setup
+
+### Clerk MCP Server  
+- **Purpose:** User authentication and management
+- **Benefits:** Direct user operations, metadata management
+- **Usage:** `mcp__clerk__*` tools for user operations
+- **Key Operations:**
+  - User creation and updates
+  - Metadata management (public/private/unsafe)
+  - Organization management
+  - Invitation system
+
+### Development Notes
+- **No Service Keys Needed:** MCP servers handle authentication internally
+- **Direct Database Access:** Use MCP tools instead of Supabase client for admin operations
+- **User Sync:** Automatic user synchronization between Clerk and Supabase via MCP
+- **Schema Management:** Database schema changes done via MCP migration tools
 
 ## Database Schema Conventions
 

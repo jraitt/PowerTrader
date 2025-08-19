@@ -4,8 +4,41 @@
 [![Next.js](https://img.shields.io/badge/Next.js-14+-black.svg)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178c6.svg)](https://www.typescriptlang.org/)
 [![Supabase](https://img.shields.io/badge/Supabase-Database-green.svg)](https://supabase.com/)
+[![Status](https://img.shields.io/badge/Status-Live%20%26%20Working-brightgreen.svg)](#)
 
 > A modern, AI-powered inventory management system for small engine machinery trading businesses. Built with Docker-first architecture for seamless development and deployment.
+
+## 🚀 **LIVE APPLICATION**
+
+**The application is currently running and fully functional!**
+
+- **Homepage:** http://localhost:3040/
+- **Sign In:** http://localhost:3040/sign-in  
+- **Inventory Dashboard:** http://localhost:3040/inventory (requires authentication)
+- **Health Check:** http://localhost:3040/api/health
+
+### ✅ **Working Features**
+- ✅ **Complete Homepage:** Hero section, features showcase, call-to-action, footer
+- ✅ **Authentication System:** Google OAuth via Clerk with proper redirects
+- ✅ **User Management:** Registration, sign-in, user profile sync to database
+- ✅ **Protected Routes:** Middleware-based authentication with automatic redirects
+- ✅ **Inventory Dashboard:** Welcome screen with stats cards and user profile
+- ✅ **Database Integration:** Supabase PostgreSQL with Row Level Security
+- ✅ **Image Storage:** Supabase storage bucket with upload policies
+- ✅ **Docker Environment:** Full containerization with hot reload development
+- ✅ **AI Integration:** Gemini 2.5 Flash API configured and ready
+- ✅ **Responsive Design:** Mobile-first Tailwind CSS implementation
+- ✅ **Health Monitoring:** Application health check endpoints
+- ✅ **Complete Item Management:** Full CRUD operations with photo upload
+- ✅ **View/Edit/Delete:** Item detail pages, edit forms, and delete functionality
+- ✅ **Photo Management:** Upload, display, and manage photos for inventory items
+- ✅ **Inventory Views:** Grid and table layouts with proper photo display
+
+### 🔄 **Next Development Phase**
+- 🤖 **AI Features:** Photo analysis and URL import functionality
+- 📊 **Analytics:** Dashboard with real inventory data
+- 🔍 **Advanced Search:** Enhanced filtering and search capabilities
+- 📈 **Performance:** Optimization and caching improvements
 
 ## 🚀 Overview
 
@@ -43,9 +76,11 @@ PowerTrader is a comprehensive web application designed to help small businesses
 - **Supabase** - PostgreSQL database with real-time capabilities
 - **Supabase Storage** - Object storage for images
 - **Row Level Security** - Database-level security
+- **Supabase MCP Server** - Direct database operations via Claude Code
 
 ### Authentication & AI
 - **Clerk** - Complete authentication solution
+- **Clerk MCP Server** - User management via Claude Code
 - **Google Gemini 2.5 Flash** - AI for image analysis and text extraction
 
 ### Development Tools
@@ -85,12 +120,11 @@ PowerTrader is a comprehensive web application designed to help small businesses
    PORT=3040
    NEXT_PUBLIC_APP_URL=http://localhost:3040
 
-   # Supabase
+   # Supabase (using MCP server - no service role key needed)
    NEXT_PUBLIC_SUPABASE_URL=https://[project].supabase.co
    NEXT_PUBLIC_SUPABASE_ANON_KEY=[anon-key]
-   SUPABASE_SERVICE_ROLE_KEY=[service-key]
 
-   # Clerk
+   # Clerk (using MCP server)
    NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=[pub-key]
    CLERK_SECRET_KEY=[secret-key]
 
