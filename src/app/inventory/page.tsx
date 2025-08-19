@@ -102,6 +102,17 @@ export default function InventoryPage() {
       if (!response.ok) throw new Error('Failed to fetch items');
       
       const data = await response.json();
+      console.log('Fetched items data:', data.items?.length, 'items');
+      
+      // Debug: Check if items have photos
+      data.items?.forEach((item: Item) => {
+        if (item.item_photos && item.item_photos.length > 0) {
+          console.log(`Item ${item.id} (${item.manufacturer} ${item.model}) has ${item.item_photos.length} photos:`, item.item_photos);
+        } else {
+          console.log(`Item ${item.id} (${item.manufacturer} ${item.model}) has no photos`);
+        }
+      });
+      
       setItems(data.items || []);
 
       // Calculate stats

@@ -5,6 +5,8 @@ import { NextResponse } from 'next/server';
 const isPublicRoute = createRouteMatcher([
   '/',
   '/api/health',
+  '/api/placeholder(.*)',
+  '/api/proxy/image(.*)',
   '/sign-in(.*)',
   '/sign-up(.*)',
 ]);
@@ -15,6 +17,7 @@ const isProtectedRoute = createRouteMatcher([
   '/api/items(.*)',
   '/api/upload(.*)',
   '/api/ai(.*)',
+  '/api/auth/sync-user(.*)',
 ]);
 
 export default clerkMiddleware((auth, request) => {

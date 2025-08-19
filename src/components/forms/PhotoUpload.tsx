@@ -8,6 +8,7 @@ import { formatFileSize } from '@/lib/utils';
 interface UploadedFile extends File {
   id: string;
   preview: string;
+  url?: string; // For imported images from URLs
 }
 
 interface PhotoUploadProps {

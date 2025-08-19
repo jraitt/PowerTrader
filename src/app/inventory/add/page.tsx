@@ -3,8 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useUser } from '@clerk/nextjs';
 import { useRouter } from 'next/navigation';
-import { ItemForm } from '@/components/forms/ItemForm';
-import { PhotoUpload } from '@/components/forms/PhotoUpload';
+import { EnhancedItemForm } from '@/components/forms/EnhancedItemForm';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
@@ -12,7 +11,6 @@ import { ItemSchemaType } from '@/types/item';
 
 export default function AddItemPage() {
   const { user, isLoaded } = useUser();
-  const [files, setFiles] = useState<File[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const router = useRouter();
 
@@ -35,13 +33,13 @@ export default function AddItemPage() {
     );
   }
 
-  const handleSubmit = async (data: ItemSchemaType) => {
+  const handleSubmit = async (data: ItemSchemaType, photos: File[]) => {
     if (isSubmitting) return;
     
     try {
       setIsSubmitting(true);
       console.log('Creating item with data:', data);
-      console.log('Files to upload:', files);
+      console.log('Photos to upload:', photos);
       
       // Ensure user is synced to database first
       const syncResponse = await fetch('/api/auth/sync-user', {
@@ -81,15 +79,87 @@ export default function AddItemPage() {
       const newItem = await response.json();
       console.log('Item created successfully:', newItem);
 
-      // TODO: Handle file uploads for photos
-      if (files.length > 0) {
-        console.log(`${files.length} files ready for upload to item ${newItem.id}`);
-        // Photo upload will be implemented next
+      // Handle photo uploads
+      if (photos.length > 0) {
+        console.log(`Uploading ${photos.length} photos for item ${newItem.id}`);
+        
+        // Handle URL-imported photos differently
+        const regularPhotos: File[] = [];
+        const urlPhotos: (File & { url: string })[] = [];
+        
+        photos.forEach(photo => {
+          if ((photo as any).url) {
+            urlPhotos.push(photo as File & { url: string });
+          } else {
+            regularPhotos.push(photo);
+          }
+        });
+        
+        // Upload regular photos first
+        if (regularPhotos.length > 0) {
+          try {
+            const photoFormData = new FormData();
+            regularPhotos.forEach(photo => {
+              photoFormData.append('files', photo);
+            });
+            photoFormData.append('itemId', newItem.id);
+
+            const uploadResponse = await fetch('/api/upload', {
+              method: 'POST',
+              body: photoFormData,
+            });
+
+            if (!uploadResponse.ok) {
+              console.error('Failed to upload regular photos');
+            }
+          } catch (photoError) {
+            console.error('Error uploading regular photos:', photoError);
+          }
+        }
+        
+        // Handle URL-imported photos by downloading them first
+        if (urlPhotos.length > 0) {
+          console.log(`Processing ${urlPhotos.length} imported photos`);
+          try {
+            const downloadResponse = await fetch('/api/ai/download-images', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                itemId: newItem.id,
+                imageUrls: urlPhotos.map(p => p.url)
+              })
+            });
+            
+            if (!downloadResponse.ok) {
+              const errorData = await downloadResponse.json();
+              console.error('Failed to download imported images:', errorData);
+              throw new Error(`Failed to download images: ${errorData.error || 'Unknown error'}`);
+            } else {
+              const downloadResults = await downloadResponse.json();
+              console.log('Successfully processed imported photos:', downloadResults);
+              console.log(`Downloaded ${downloadResults.downloadedImages} of ${downloadResults.totalRequested} images`);
+            }
+          } catch (error) {
+            console.error('Error processing imported photos:', error);
+            // Don't fail the entire process if photo download fails
+            alert(`Item created successfully, but some photos failed to download: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          }
+        }
       }
 
-      // Show success message and redirect
-      alert(`Item "${data.manufacturer} ${data.model}" created successfully!`);
-      router.push('/inventory');
+      // Show success message and redirect with a small delay to ensure photos are processed
+      alert(`Item "${data.manufacturer} ${data.model}" created successfully with ${photos.length} photos!`);
+      
+      // Small delay to allow photo processing to complete
+      if (photos.length > 0) {
+        setTimeout(() => {
+          router.push('/inventory');
+        }, 1000); // 1 second delay
+      } else {
+        router.push('/inventory');
+      }
       
     } catch (error) {
       console.error('Error creating item:', error);
@@ -99,9 +169,6 @@ export default function AddItemPage() {
     }
   };
 
-  const handleFilesChange = (newFiles: File[]) => {
-    setFiles(newFiles);
-  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -127,81 +194,12 @@ export default function AddItemPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Left Column - Item Form */}
-          <div>
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Item Details</h2>
-              <ItemForm 
-                onSubmit={handleSubmit}
-                submitButtonText="Create Item"
-                isLoading={isSubmitting}
-              />
-            </div>
-          </div>
-
-          {/* Right Column - Photo Upload */}
-          <div>
-            <div className="bg-white rounded-lg shadow-sm p-6">
-              <h2 className="text-lg font-semibold text-gray-900 mb-4">Photos</h2>
-              <PhotoUpload
-                onFilesChange={handleFilesChange}
-                maxFiles={20}
-              />
-            </div>
-
-            {/* AI Features Card */}
-            <div className="mt-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-6 border border-blue-200">
-              <h3 className="text-lg font-semibold text-blue-900 mb-2">AI-Powered Features</h3>
-              <p className="text-blue-700 mb-4">
-                PowerTrader can help you create listings faster with AI assistance.
-              </p>
-              <div className="space-y-3">
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
-                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-blue-900">Photo Analysis</h4>
-                    <p className="text-sm text-blue-700">Upload photos and let AI identify the make, model, and condition</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
-                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-blue-900">URL Import</h4>
-                    <p className="text-sm text-blue-700">Import listings from Facebook Marketplace or Craigslist</p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-5 h-5 bg-blue-500 rounded-full flex items-center justify-center mt-0.5">
-                    <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h4 className="font-medium text-blue-900">Smart Descriptions</h4>
-                    <p className="text-sm text-blue-700">Generate compelling item descriptions automatically</p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-4 flex space-x-3">
-                <Button variant="outline" size="sm" className="border-blue-300 text-blue-700 hover:bg-blue-100">
-                  Analyze Photos
-                </Button>
-                <Button variant="outline" size="sm" className="border-blue-300 text-blue-700 hover:bg-blue-100">
-                  Import from URL
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <EnhancedItemForm 
+          onSubmit={handleSubmit}
+          submitButtonText="Create Item"
+          isLoading={isSubmitting}
+          showAIFeatures={true}
+        />
       </div>
     </div>
   );

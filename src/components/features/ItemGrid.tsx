@@ -22,6 +22,14 @@ export function ItemGrid({ items, onEdit, onDelete, onView, isLoading = false }:
     setImageErrors(prev => new Set(prev).add(itemId));
   };
 
+  const getPrimaryImage = (item: Item): string | null => {
+    if (!item.item_photos || item.item_photos.length === 0) return null;
+    
+    // Find primary image or use first image
+    const primaryPhoto = item.item_photos.find(p => p.is_primary) || item.item_photos[0];
+    return primaryPhoto?.url || null;
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Available':
@@ -50,14 +58,6 @@ export function ItemGrid({ items, onEdit, onDelete, onView, isLoading = false }:
       default:
         return 'bg-gray-50 text-gray-700';
     }
-  };
-
-  const getPrimaryImage = (item: Item): string | null => {
-    if (!item.item_photos || item.item_photos.length === 0) return null;
-    
-    // Find primary image or use first image
-    const primaryPhoto = item.item_photos.find(p => p.is_primary) || item.item_photos[0];
-    return primaryPhoto?.url || null;
   };
 
   if (isLoading) {
@@ -98,6 +98,18 @@ export function ItemGrid({ items, onEdit, onDelete, onView, isLoading = false }:
       {items.map((item) => {
         const primaryImage = getPrimaryImage(item);
         const hasImageError = imageErrors.has(item.id);
+        
+        // Debug logging for photo issues
+        if (item.item_photos && item.item_photos.length > 0) {
+          console.log(`Item ${item.id} (${item.manufacturer} ${item.model}):`, {
+            totalPhotos: item.item_photos.length,
+            primaryImage: primaryImage,
+            hasError: hasImageError,
+            photos: item.item_photos.map(p => ({ url: p.url, is_primary: p.is_primary }))
+          });
+        } else {
+          console.log(`Item ${item.id} (${item.manufacturer} ${item.model}) has no photos`);
+        }
 
         return (
           <div
@@ -112,6 +124,7 @@ export function ItemGrid({ items, onEdit, onDelete, onView, isLoading = false }:
                   alt={`${item.manufacturer} ${item.model}`}
                   fill
                   className="object-cover"
+                  priority={true}
                   onError={() => handleImageError(item.id)}
                   sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 25vw"
                 />
@@ -122,6 +135,13 @@ export function ItemGrid({ items, onEdit, onDelete, onView, isLoading = false }:
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
                     </svg>
                     <p className="text-sm">No Image</p>
+                    {/* Debug info */}
+                    {item.item_photos && item.item_photos.length > 0 && (
+                      <p className="text-xs mt-1">
+                        {item.item_photos.length} photos available
+                        {hasImageError && ' (load error)'}
+                      </p>
+                    )}
                   </div>
                 </div>
               )}

@@ -16,7 +16,9 @@
       "Bash(docker run:*)",
       "Bash(cp:*)",
       "Bash(git add:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "mcp__context7__resolve-library-id",
+      "WebFetch(domain:clerk.com)"
     ],
     "deny": [],
     "ask": [],
