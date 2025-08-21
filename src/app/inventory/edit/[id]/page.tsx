@@ -21,7 +21,7 @@ export default function EditItemPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const itemId = params.id as string;
+  const itemId = params['id'] as string;
 
   useEffect(() => {
     if (isLoaded && user && itemId) {

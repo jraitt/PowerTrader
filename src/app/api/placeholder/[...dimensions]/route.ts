@@ -1,13 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 export async function GET(
-  request: NextRequest, 
+  _request: NextRequest, 
   { params }: { params: { dimensions: string[] } }
 ) {
   try {
     const [width, height] = params.dimensions;
-    const w = parseInt(width) || 150;
-    const h = parseInt(height) || 150;
+    const w = parseInt(width || '150') || 150;
+    const h = parseInt(height || '150') || 150;
 
     // Generate a simple SVG placeholder
     const svg = `

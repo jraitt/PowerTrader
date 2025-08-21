@@ -22,19 +22,17 @@ services:
       # Named volumes for dependencies and build cache (better performance)
       - powertrader_node_modules:/app/node_modules
       - powertrader_next_cache:/app/.next
-      - powertrader_pnpm_store:/app/.pnpm-store
+      - powertrader_pnpm_store:/app/.pnpm/store
       
       # Package files (for dependency management)
       - ./package.json:/app/package.json:delegated
-      - ./pnpm-lock.yaml:/app/pnpm-lock.yaml:delegated
     env_file:
-      - .env.${NODE_ENV:-development}
+      - .env
     environment:
-      - NODE_ENV=${NODE_ENV:-development}
       - PORT=3040
       # pnpm configuration for container optimization
       - PNPM_HOME=/app/.pnpm
-    command: ["sh", "-c", "pnpm dev"]
+    command: ["sh", "-c", "${DOCKER_COMMAND:-pnpm dev}"]
     restart: ${RESTART_POLICY:-unless-stopped}
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3040/api/health || exit 1"]

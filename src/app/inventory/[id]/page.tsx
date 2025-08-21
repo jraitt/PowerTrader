@@ -29,7 +29,7 @@ export default function ItemDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const itemId = params.id as string;
+  const itemId = params['id'] as string;
 
   useEffect(() => {
     if (isLoaded && user && itemId) {

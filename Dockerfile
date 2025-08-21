@@ -13,15 +13,14 @@ ENV PNPM_HOME="/app/.pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 
 # Create .pnpm directory and set permissions
-RUN mkdir -p /app/.pnpm-store && \
-    mkdir -p /app/.pnpm && \
-    chmod 755 /app/.pnpm-store /app/.pnpm
+RUN mkdir -p /app/.pnpm && \
+    chmod 755 /app/.pnpm
 
 # Configure pnpm store location for better caching
-RUN pnpm config set store-dir /app/.pnpm-store
+RUN pnpm config set store-dir /app/.pnpm/store
 
 # Copy package files for better layer caching
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json ./
 
 # Dependencies stage
 FROM base AS deps
@@ -39,10 +38,10 @@ FROM base AS development
 
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/.pnpm-store ./.pnpm-store
+COPY --from=deps /app/.pnpm ./.pnpm
 
 # Copy only necessary files for development (source code mounted via volumes)
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json ./
 COPY next.config.js ./
 COPY tailwind.config.js ./
 COPY postcss.config.js ./
@@ -51,6 +50,12 @@ COPY components.json ./
 
 # Create necessary directories that might be mounted
 RUN mkdir -p src public
+
+# Ensure nextjs user has ownership of /app for development runtime operations
+RUN chown -R nextjs:nodejs /app
+
+# Switch to non-root user for development
+USER nextjs
 
 # Expose port 3040
 EXPOSE 3040
@@ -87,10 +92,10 @@ RUN npm install -g pnpm@8.15.6
 ENV PNPM_HOME="/app/.pnpm"
 ENV PATH="$PNPM_HOME:$PATH"
 RUN mkdir -p /app/.pnpm && \
-    pnpm config set store-dir /app/.pnpm-store
+    pnpm config set store-dir /app/.pnpm/store
 
 # Copy package files and install production dependencies only
-COPY package.json pnpm-lock.yaml* ./
+COPY package.json ./
 RUN if [ -f pnpm-lock.yaml ]; then \
         pnpm install --prod --frozen-lockfile --no-optional; \
     else \
@@ -102,6 +107,9 @@ RUN if [ -f pnpm-lock.yaml ]; then \
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+
+# Ensure nextjs user has ownership of /app for runtime operations
+RUN chown -R nextjs:nodejs /app
 
 # Switch to non-root user
 USER nextjs

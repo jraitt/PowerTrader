@@ -18,7 +18,14 @@
       "Bash(git add:*)",
       "Bash(git push:*)",
       "mcp__context7__resolve-library-id",
-      "WebFetch(domain:clerk.com)"
+      "WebFetch(domain:clerk.com)",
+      "Bash(NODE_ENV=production docker-compose build --no-cache)",
+      "Bash(mkdir:*)",
+      "Bash(touch:*)",
+      "Bash(docker ps:*)",
+      "Bash(sudo nginx:*)",
+      "Bash(sudo systemctl status:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": [],

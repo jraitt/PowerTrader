@@ -1,15 +1,17 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { AIAnalysisResult, URLImportResult, ItemCategoryType } from '@/types/item';
 
-// Initialize Gemini AI
-const apiKey = process.env['GEMINI_API_KEY'];
+// Get configuration
 const model = process.env['GEMINI_MODEL'] || 'gemini-2.5-flash';
 
-if (!apiKey) {
-  throw new Error('GEMINI_API_KEY environment variable is required');
+// Initialize Gemini AI lazily to avoid build-time errors
+function getGenAI() {
+  const apiKey = process.env['GEMINI_API_KEY'];
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY environment variable is required');
+  }
+  return new GoogleGenerativeAI(apiKey);
 }
-
-const genAI = new GoogleGenerativeAI(apiKey);
 
 /**
  * Rate limiting and retry configuration
@@ -61,7 +63,7 @@ export async function analyzePhotos(photos: File[]): Promise<AIAnalysisResult> {
 
   return withRetry(async () => {
     return rateLimitedRequest(async () => {
-      const genModel = genAI.getGenerativeModel({ model });
+      const genModel = getGenAI().getGenerativeModel({ model });
 
       // Convert first photo to base64 for analysis
       const photo = photos[0];
@@ -217,7 +219,7 @@ export async function importFromURL(url: string, itemId?: string): Promise<URLIm
  * Enhance scraped data with AI analysis
  */
 async function enhanceWithAI(scrapedData: URLImportResult): Promise<URLImportResult> {
-  const genModel = genAI.getGenerativeModel({ model });
+  const genModel = getGenAI().getGenerativeModel({ model });
 
   const extractedYear = scrapedData.metadata?.extractedYear;
   
@@ -308,7 +310,7 @@ export async function generateDescription(
 ): Promise<string> {
   return withRetry(async () => {
     return rateLimitedRequest(async () => {
-      const genModel = genAI.getGenerativeModel({ model });
+      const genModel = getGenAI().getGenerativeModel({ model });
 
       const prompt = `
         Create an engaging and detailed description for a ${category} listing:
@@ -352,7 +354,7 @@ export async function getPricingSuggestions(
 }> {
   return withRetry(async () => {
     return rateLimitedRequest(async () => {
-      const genModel = genAI.getGenerativeModel({ model });
+      const genModel = getGenAI().getGenerativeModel({ model });
 
       const prompt = `
         Provide pricing suggestions for this ${category}:
@@ -423,7 +425,7 @@ function isValidURL(url: string): boolean {
  * Check if AI features are enabled
  */
 export function isAIEnabled(): boolean {
-  return process.env['ENABLE_AI_FEATURES'] === 'true' && !!apiKey;
+  return process.env['ENABLE_AI_FEATURES'] === 'true' && !!process.env['GEMINI_API_KEY'];
 }
 
 /**
@@ -431,13 +433,13 @@ export function isAIEnabled(): boolean {
  */
 export async function getAIStatus(): Promise<{ status: 'ok' | 'error'; message: string }> {
   try {
-    if (!apiKey) {
+    if (!process.env['GEMINI_API_KEY']) {
       return { status: 'error', message: 'API key not configured' };
     }
 
     // Simple test request
     await rateLimitedRequest(async () => {
-      const genModel = genAI.getGenerativeModel({ model });
+      const genModel = getGenAI().getGenerativeModel({ model });
       await genModel.generateContent('Test');
     });
 
