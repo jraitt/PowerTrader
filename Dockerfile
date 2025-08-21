@@ -36,6 +36,10 @@ RUN if [ -f pnpm-lock.yaml ]; then \
 # Development stage
 FROM base AS development
 
+# Create non-root user for security (identical to production)
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser --system --uid 1001 nextjs
+
 # Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/.pnpm ./.pnpm
@@ -50,6 +54,9 @@ COPY components.json ./
 
 # Create necessary directories that might be mounted
 RUN mkdir -p src public
+
+# Create .next directory with proper permissions for nextjs user
+RUN mkdir -p .next && chown -R nextjs:nodejs .next
 
 # Ensure nextjs user has ownership of /app for development runtime operations
 RUN chown -R nextjs:nodejs /app
