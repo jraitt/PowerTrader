@@ -25,12 +25,15 @@
       "Bash(docker ps:*)",
       "Bash(sudo nginx:*)",
       "Bash(sudo systemctl status:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(docker volume rm:*)",
+      "Bash(true)"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
-      "C:\\c\\Users\\jrait\\Documents\\AI\\Projects"
+      "C:\\c\\Users\\jrait\\Documents\\AI\\Projects",
+      "C:\\mnt\\c\\Users\\jrait\\Documents\\AI\\Projects"
     ]
   }
 }

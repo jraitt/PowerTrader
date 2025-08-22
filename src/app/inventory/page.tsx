@@ -46,6 +46,9 @@ export default function InventoryPage() {
     soldThisMonth: 0
   });
 
+  // Check if user is admin
+  const isAdmin = user?.publicMetadata?.role === 'admin';
+
   // useEffect hook must be called before any early returns
   useEffect(() => {
     // Only fetch items if user is loaded and authenticated
@@ -187,14 +190,21 @@ export default function InventoryPage() {
     redirect('/sign-in');
   }
 
-  // Don't render anything while auth is loading or user is not authenticated
-  if (!isLoaded || !user) {
+  // Redirect non-admin users to homepage
+  if (isLoaded && user && !isAdmin) {
+    redirect('/');
+  }
+
+  // Don't render anything while auth is loading or user is not authenticated/authorized
+  if (!isLoaded || !user || !isAdmin) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-lg text-gray-600">
-            {!isLoaded ? 'Initializing...' : 'Redirecting to sign in...'}
+            {!isLoaded ? 'Initializing...' : 
+             !user ? 'Redirecting to sign in...' : 
+             'Checking permissions...'}
           </p>
         </div>
       </div>

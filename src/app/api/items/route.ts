@@ -8,11 +8,6 @@ import { createSupabaseServerComponent, createSupabaseServiceClient } from '@/li
 export async function GET(request: NextRequest) {
   try {
     const { userId } = auth();
-    
-    if (!userId) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { searchParams } = new URL(request.url);
     
     // Parse query parameters
@@ -24,43 +19,58 @@ export async function GET(request: NextRequest) {
     const sortBy = searchParams.get('sort') || 'created_at';
     const sortOrder = searchParams.get('order') || 'desc';
 
-    // Use service role client for user lookup to bypass RLS
+    // Use service role client to bypass RLS
     const serviceSupabase = createSupabaseServiceClient();
-    const supabase = createSupabaseServerComponent();
 
-    // Try to get user's database ID
-    const { data: userData } = await serviceSupabase
-      .from('users')
-      .select('id')
-      .eq('clerk_id', userId)
-      .single();
+    // Check if this is a public request (no auth) vs admin request
+    const isPublicRequest = !userId;
+    const isStatusFilteredToAvailable = status === 'Available';
 
-    if (!userData) {
-      // User not found in database yet - return empty result but allow app to work
-      console.log(`User not found for Clerk ID: ${userId}, returning empty inventory`);
-      return NextResponse.json({
-        items: [],
-        pagination: {
-          page: 1,
-          limit: 20,
-          total: 0,
-          totalPages: 0,
-          hasNext: false,
-          hasPrev: false
-        },
-        message: 'User needs to be synced to database'
-      });
-    }
-
-    // Build query using service role client to bypass RLS
+    // For public requests, only show available items
+    // For admin requests, show user's items (with filters)
     let query = serviceSupabase
       .from('items')
       .select(`
         *,
         item_photos(*)
       `)
-      .eq('created_by', userData.id)
       .is('deleted_at', null);
+
+    if (isPublicRequest || isStatusFilteredToAvailable) {
+      // Public access - only show available items
+      query = query.eq('status', 'Available');
+    } else {
+      // Admin access - need to filter by user
+      if (!userId) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+
+      // Get user's database ID for admin requests
+      const { data: userData } = await serviceSupabase
+        .from('users')
+        .select('id')
+        .eq('clerk_id', userId)
+        .single();
+
+      if (!userData) {
+        // User not found in database yet - return empty result but allow app to work
+        console.log(`User not found for Clerk ID: ${userId}, returning empty inventory`);
+        return NextResponse.json({
+          items: [],
+          pagination: {
+            page: 1,
+            limit: 20,
+            total: 0,
+            totalPages: 0,
+            hasNext: false,
+            hasPrev: false
+          },
+          message: 'User needs to be synced to database'
+        });
+      }
+
+      query = query.eq('created_by', userData.id);
+    }
 
     // Add filters
     if (search) {
@@ -95,11 +105,39 @@ export async function GET(request: NextRequest) {
     }
 
     // Get total count for pagination using service role client to bypass RLS
-    const { count: totalCount } = await serviceSupabase
+    let countQuery = serviceSupabase
       .from('items')
       .select('*', { count: 'exact', head: true })
-      .eq('created_by', userData.id)
       .is('deleted_at', null);
+
+    if (isPublicRequest || isStatusFilteredToAvailable) {
+      // Public access - only count available items
+      countQuery = countQuery.eq('status', 'Available');
+    } else {
+      // Admin access - count user's items
+      const { data: userData } = await serviceSupabase
+        .from('users')
+        .select('id')
+        .eq('clerk_id', userId!)
+        .single();
+      
+      if (userData) {
+        countQuery = countQuery.eq('created_by', userData.id);
+      }
+    }
+
+    // Apply the same filters to count query
+    if (search) {
+      countQuery = countQuery.or(`manufacturer.ilike.%${search}%,model.ilike.%${search}%,description.ilike.%${search}%,vin_serial.ilike.%${search}%`);
+    }
+    if (category) {
+      countQuery = countQuery.eq('category', category);
+    }
+    if (status && !isPublicRequest && !isStatusFilteredToAvailable) {
+      countQuery = countQuery.eq('status', status);
+    }
+
+    const { count: totalCount } = await countQuery;
 
     const total = totalCount || 0;
 

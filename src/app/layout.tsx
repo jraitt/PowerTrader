@@ -6,12 +6,12 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'PowerTrader - Buy / Sell the East',
-  description: 'AI-powered inventory management system for small engine machinery trading',
-  keywords: ['inventory', 'machinery', 'ATV', 'snowmobile', 'trailer', 'trading'],
-  authors: [{ name: 'PowerTrader Team' }],
-  creator: 'PowerTrader',
-  publisher: 'PowerTrader',
+  title: 'Primitive Powersports - Quality ATVs, Snowmobiles & Small Engines',
+  description: 'Your trusted source for quality ATVs, snowmobiles, lawn tractors, and utility trailers in the East. Browse our inventory of carefully inspected small engine machinery.',
+  keywords: ['ATV', 'snowmobile', 'lawn tractor', 'utility trailer', 'small engine', 'powersports', 'primitive powersports'],
+  authors: [{ name: 'Primitive Powersports' }],
+  creator: 'Primitive Powersports',
+  publisher: 'Primitive Powersports',
   formatDetection: {
     email: false,
     address: false,
@@ -23,24 +23,24 @@ export const metadata: Metadata = {
     apple: '/favicon.svg',
   },
   openGraph: {
-    title: 'PowerTrader - Buy / Sell the East',
-    description: 'AI-powered inventory management system for small engine machinery trading',
+    title: 'Primitive Powersports - Quality ATVs, Snowmobiles & Small Engines',
+    description: 'Your trusted source for quality ATVs, snowmobiles, lawn tractors, and utility trailers in the East. Browse our inventory of carefully inspected small engine machinery.',
     type: 'website',
     locale: 'en_US',
     url: '/',
-    siteName: 'PowerTrader',
+    siteName: 'Primitive Powersports',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'PowerTrader - Buy / Sell the East',
-    description: 'AI-powered inventory management system for small engine machinery trading',
+    title: 'Primitive Powersports - Quality ATVs, Snowmobiles & Small Engines',
+    description: 'Your trusted source for quality ATVs, snowmobiles, lawn tractors, and utility trailers in the East. Browse our inventory of carefully inspected small engine machinery.',
   },
   robots: {
-    index: false,
-    follow: false,
-    noarchive: true,
-    nosnippet: true,
-    noimageindex: true,
+    index: true,
+    follow: true,
+    noarchive: false,
+    nosnippet: false,
+    noimageindex: false,
   },
 };
 

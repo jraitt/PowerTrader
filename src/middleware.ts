@@ -4,19 +4,28 @@ import { NextResponse } from 'next/server';
 // Define public routes that don't require authentication
 const isPublicRoute = createRouteMatcher([
   '/',
+  '/shop(.*)',
+  '/about',
+  '/contact',
   '/api/health',
   '/api/placeholder(.*)',
   '/api/proxy/image(.*)',
+  '/api/public(.*)', // Allow public API access
   '/sign-in(.*)',
   '/sign-up(.*)',
 ]);
 
-// Define protected routes that require authentication
-const isProtectedRoute = createRouteMatcher([
+// Define admin-only routes that require admin role
+const isAdminRoute = createRouteMatcher([
   '/inventory(.*)',
   '/api/items(.*)',
   '/api/upload(.*)',
   '/api/ai(.*)',
+  '/api/admin(.*)',
+]);
+
+// Define routes that require authentication but not admin
+const isAuthRoute = createRouteMatcher([
   '/api/auth/sync-user(.*)',
 ]);
 
@@ -24,13 +33,23 @@ export default clerkMiddleware((auth, request) => {
   const { userId } = auth();
   const { pathname } = request.nextUrl;
 
-  // If user is authenticated and on public pages, redirect to inventory
-  if (userId && (pathname === '/' || pathname === '/sign-in' || pathname === '/sign-up')) {
-    return NextResponse.redirect(new URL('/inventory', request.url));
+  // No auto-redirect to inventory - let users stay on homepage
+  // Remove the auto-redirect behavior for authenticated users
+
+  // Protect admin routes - require admin role
+  if (isAdminRoute(request)) {
+    if (!userId) {
+      return NextResponse.redirect(new URL('/sign-in', request.url));
+    }
+    
+    // Check if user has admin role (we'll implement this check via metadata)
+    // For now, we'll allow any authenticated user to access admin routes
+    // This will be properly implemented with role checking
+    return NextResponse.next();
   }
 
-  // Protect routes that require authentication
-  if (isProtectedRoute(request) && !userId) {
+  // Protect auth routes that require authentication
+  if (isAuthRoute(request) && !userId) {
     return NextResponse.redirect(new URL('/sign-in', request.url));
   }
 
@@ -39,11 +58,7 @@ export default clerkMiddleware((auth, request) => {
     return NextResponse.next();
   }
 
-  // Protect all other routes by default
-  if (!userId) {
-    return NextResponse.redirect(new URL('/sign-in', request.url));
-  }
-
+  // For any other route, allow access (default to public)
   return NextResponse.next();
 });
 
