@@ -11,12 +11,20 @@ interface UploadedFile extends File {
   url?: string; // For imported images from URLs
 }
 
+interface ExistingPhoto {
+  id: string;
+  url: string;
+  is_primary?: boolean;
+  order_index?: number;
+}
+
 interface PhotoUploadProps {
   onFilesChange: (files: File[]) => void;
   maxFiles?: number;
   maxFileSize?: number; // in bytes
   acceptedTypes?: string[];
-  existingPhotos?: string[];
+  existingPhotos?: string[] | ExistingPhoto[];
+  onDeleteExistingPhoto?: (photoId: string) => Promise<void>;
   className?: string;
 }
 
@@ -26,11 +34,13 @@ export function PhotoUpload({
   maxFileSize = 10 * 1024 * 1024, // 10MB
   acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'],
   existingPhotos = [],
+  onDeleteExistingPhoto,
   className = ''
 }: PhotoUploadProps) {
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
+  const [deletingPhotos, setDeletingPhotos] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validateFile = useCallback((file: File): string | null => {
@@ -127,6 +137,25 @@ export function PhotoUpload({
     }
   }, [processFiles]);
 
+  const handleDeleteExistingPhoto = useCallback(async (photoId: string) => {
+    if (!onDeleteExistingPhoto) return;
+    
+    setDeletingPhotos(prev => new Set(prev).add(photoId));
+    
+    try {
+      await onDeleteExistingPhoto(photoId);
+    } catch (error) {
+      console.error('Failed to delete photo:', error);
+      setErrors(prev => [...prev, 'Failed to delete photo. Please try again.']);
+    } finally {
+      setDeletingPhotos(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(photoId);
+        return newSet;
+      });
+    }
+  }, [onDeleteExistingPhoto]);
+
   const openFileDialog = () => {
     fileInputRef.current?.click();
   };
@@ -209,20 +238,47 @@ export function PhotoUpload({
         <div className="space-y-2">
           <h4 className="text-sm font-medium text-gray-900">Existing Photos</h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {existingPhotos.map((photo, index) => (
-              <div key={`existing-${index}`} className="relative group">
-                <div className="aspect-square rounded-lg border border-gray-200 overflow-hidden bg-gray-50">
-                  <img
-                    src={photo}
-                    alt={`Existing photo ${index + 1}`}
-                    className="w-full h-full object-cover"
-                  />
+            {existingPhotos.map((photo, index) => {
+              const photoUrl = typeof photo === 'string' ? photo : photo.url;
+              const photoId = typeof photo === 'string' ? `existing-${index}` : photo.id;
+              const canDelete = typeof photo !== 'string' && onDeleteExistingPhoto;
+              const isDeleting = deletingPhotos.has(photoId);
+              
+              return (
+                <div key={photoId} className="relative group">
+                  <div className={`aspect-square rounded-lg border border-gray-200 overflow-hidden bg-gray-50 ${isDeleting ? 'opacity-50' : ''}`}>
+                    <img
+                      src={photoUrl}
+                      alt={`Existing photo ${index + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                    {isDeleting && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-50">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white"></div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
+                    {index + 1}
+                  </div>
+                  
+                  {/* Delete Button */}
+                  {canDelete && !isDeleting && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteExistingPhoto(photoId);
+                      }}
+                      className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      type="button"
+                      title="Delete photo"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
                 </div>
-                <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
-                  {index + 1}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}

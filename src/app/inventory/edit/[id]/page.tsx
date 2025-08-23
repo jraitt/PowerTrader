@@ -20,6 +20,7 @@ export default function EditItemPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const itemId = params['id'] as string;
 
@@ -27,7 +28,7 @@ export default function EditItemPage() {
     if (isLoaded && user && itemId) {
       fetchItem();
     }
-  }, [isLoaded, user, itemId]);
+  }, [isLoaded, user, itemId, refreshKey]);
 
   const fetchItem = async () => {
     try {
@@ -115,6 +116,25 @@ export default function EditItemPage() {
     }
   };
 
+  const handleDeletePhoto = async (photoId: string) => {
+    try {
+      const response = await fetch(`/api/upload?photoId=${photoId}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete photo');
+      }
+
+      // Refresh the item data to get updated photos
+      setRefreshKey(prev => prev + 1);
+    } catch (error) {
+      console.error('Error deleting photo:', error);
+      throw error; // Re-throw to let PhotoUpload component handle the error display
+    }
+  };
+
   if (!isLoaded || !user) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -198,8 +218,13 @@ export default function EditItemPage() {
     vin_serial: item.vin_serial || '',
   };
 
-  // Extract existing photo URLs
-  const existingPhotos = item.item_photos?.map(photo => photo.url) || [];
+  // Extract existing photo data
+  const existingPhotos = item.item_photos?.map(photo => ({
+    id: photo.id,
+    url: photo.url,
+    is_primary: photo.is_primary,
+    order_index: photo.order_index
+  })) || [];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -240,6 +265,7 @@ export default function EditItemPage() {
               <PhotoUpload
                 onFilesChange={setFiles}
                 existingPhotos={existingPhotos}
+                onDeleteExistingPhoto={handleDeletePhoto}
                 maxFiles={20}
               />
             </div>
